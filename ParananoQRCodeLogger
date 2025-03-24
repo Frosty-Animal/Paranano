@@ -1,0 +1,166 @@
+port qrcode  # makes custom QR codes for future use to add more QR codes to the database (Admin Use)
+import cv2     # OpenCv: view QR code and analyze it. Both user and admin use
+import sqlite3 # stores QR code information on a local database (Admin use)
+import tkinter as tk
+from tkcalendar import DateEntry, Calendar  
+
+class PersistentCalendar(Calendar):
+    def _on_click(self, event):
+        element = self.identify(event.x, event.y)
+        # Debug: print("Clicked element:", element)
+        if element in ("arrow", "header"):
+            return "break" 
+        return super()._on_click(event)
+
+class PersistentDateEntry(DateEntry):
+    def _show_calendar(self):
+        if hasattr(self, '_top_cal') and self._top_cal.winfo_exists():
+            self._top_cal.destroy()
+        self._top_cal = tk.Toplevel(self)
+        self._cal = PersistentCalendar(self._top_cal, **self._cal_options)
+        self._cal.pack()
+
+def minimize():
+    root.iconify()
+
+def exit_app():
+    root.destroy()
+
+def add_QRCodeInformation(data):
+    conn = sqlite3.connect(r'C:\Users\ihajabo\Desktop\QRCodeDatabase.db')
+    cursor = conn.cursor()
+    parts = data.split(',')
+    if len(parts) != 5:
+        print("Invalid data format!")
+        conn.close()
+        return
+    membrane, machine, collector, time_val, date_val = [p.strip() for p in parts]
+    cursor.execute('''
+        INSERT INTO QRCodeInformation (membrane, machine, collector, time, date)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (membrane, machine, collector, time_val, date_val))
+    conn.commit()
+    conn.close()
+    print("Data inserted.")
+
+
+
+def load_data():
+    # Get the date from the DateEntry widget
+    selected_date = pde.get_date().strftime("%Y-%m-%d")
+    
+    conn = sqlite3.connect(r'C:\Users\ihajabo\Desktop\QRCodeDatabase.db')
+    cursor = conn.cursor()
+    # Query records that match the selected date
+    cursor.execute("SELECT * FROM QRCodeInformation WHERE date = ? ORDER BY id DESC", (selected_date,))
+    record = cursor.fetchone()
+    conn.close()
+    
+    if record:
+        # record structure: (id, membrane, machine, collector, time, date)
+        membrane = record[1]
+        machine = record[2]
+        collector = record[3]
+        time_val = record[4]
+        
+        # Temporarily enable the entries to update them
+        for entry in (entry1, entry2, entry3, entry4):
+            entry.config(state='normal')
+        
+        entry1.delete(0, tk.END)
+        entry1.insert(0, membrane)
+        
+        entry2.delete(0, tk.END)
+        entry2.insert(0, machine)
+        
+        entry3.delete(0, tk.END)
+        entry3.insert(0, collector)
+        
+        entry4.delete(0, tk.END)
+        entry4.insert(0, time_val)
+        
+        # Disable the entries again so users can't modify them
+        for entry in (entry1, entry2, entry3, entry4):
+            entry.config(state='disabled')
+    else:
+        print("No record found for the selected date.")
+
+
+def main():
+    global root, entry1, entry2, entry3, entry4, pde 
+
+    # Set up the database and table if they don't exist
+    conn = sqlite3.connect(r'C:\Users\ihajabo\Desktop\QRCodeDatabase.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS QRCodeInformation (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            membrane TEXT,
+            machine TEXT,
+            collector TEXT,
+            time TEXT,
+            date TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+    # Set up the main window
+    root = tk.Tk()
+    root.title("Paranano QR Code Logger")
+    root.attributes("-fullscreen", True)
+    root.bind("<Escape>", lambda e: root.attributes("-fullscreen", False))
+
+    # Top bar frame with minimize and exit buttons
+    top_bar = tk.Frame(root, bg="#222222", height=40)
+    top_bar.pack(fill=tk.X, side=tk.TOP)
+    btn_exit = tk.Button(top_bar, text="❌", command=exit_app, bg="#222222", fg="white", bd=0)
+    btn_exit.pack(side=tk.RIGHT, padx=5)
+    btn_min = tk.Button(top_bar, text="🗕", command=minimize, bg="#222222", fg="white", bd=0)
+    btn_min.pack(side=tk.RIGHT)
+
+    tk.Label(root, text="Waiting for an item to be scanned", font=("Arial", 18)).pack(pady=20)
+
+    # DateEntry widget
+    pde = PersistentDateEntry(root, width=12, background='darkblue', foreground='white', borderwidth=2)
+    pde.pack(pady=20)
+
+    # Frame for the labels and text boxes
+    frame = tk.Frame(root)
+    frame.pack(padx=10, pady=10)
+    
+    # Membrane Number
+    tk.Label(frame, text="Membrane Number:").grid(row=0, column=0, sticky="e", padx=(0,10))
+    entry1 = tk.Entry(frame, state='disabled')
+    entry1.grid(row=0, column=1, pady=5)
+    
+    # Machine Number
+    tk.Label(frame, text="Machine Number:").grid(row=1, column=0, sticky="e", padx=(0,10))
+    entry2 = tk.Entry(frame, state='disabled')
+    entry2.grid(row=1, column=1, pady=5)
+    
+    # Collector Number
+    tk.Label(frame, text="Collector Number:").grid(row=2, column=0, sticky="e", padx=(0,10))
+    entry3 = tk.Entry(frame, state='disabled')
+    entry3.grid(row=2, column=1, pady=5)
+    
+    # Manufactured Time
+    tk.Label(frame, text="Manufactured Time:").grid(row=3, column=0, sticky="e", padx=(0,10))
+    entry4 = tk.Entry(frame, state='disabled')
+    entry4.grid(row=3, column=1, pady=5)
+    
+    # Button to load data from the database and display it in the text boxes
+    test_button1 = tk.Button(root, text="Add QR Code Info 3/21/2025", command=lambda: add_QRCodeInformation('1,2,3,2pm,2025-03-21'))
+    test_button1.pack(pady=10)
+
+    test_button2 = tk.Button(root, text="Add QR Code Info 3/20/2025", command=lambda: add_QRCodeInformation('4,5,6,4pm,2025-03-20'))
+    test_button2.pack(pady=10)
+    
+
+    load_button = tk.Button(root, text="Load QR Code Data", command=load_data)
+    load_button.pack(pady=10)
+    
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
