@@ -1,4 +1,4 @@
-port qrcode  # makes custom QR codes for future use to add more QR codes to the database (Admin Use)
+import qrcode  # makes custom QR codes for future use to add more QR codes to the database (Admin Use)
 import cv2     # OpenCv: view QR code and analyze it. Both user and admin use
 import sqlite3 # stores QR code information on a local database (Admin use)
 import tkinter as tk
